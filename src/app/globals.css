@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
+@theme {
+  --color-circadian-50: #e8f7fc;
+  --color-circadian-100: #d0f0f8;
+  --color-circadian-200: #a2e2f3;
+  --color-circadian-300: #75d4ed;
+  --color-circadian-400: #3cc1e4;
+  --color-circadian-500: #1bafd0;
+  --color-circadian-600: #1890ac;
+  --color-circadian-700: #166f86;
+  --color-circadian-800: #195a6d;
+  --color-circadian-900: #194c5b;
+
+  --color-muted-foreground: #6b7280;
+
+  --font-serif: var(--font-fraunces), Fraunces, Georgia, serif;
+  --font-display: var(--font-inter), SF Pro Display, Inter, sans-serif;
+  --font-sans: var(--font-inter), Inter, sans-serif;
+}
+
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #111827;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+.container-width {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 80rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-width {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-width {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+.section-padding {
+  padding: 5rem 1rem;
+}
+
+@media (min-width: 768px) {
+  .section-padding {
+    padding-top: 7rem;
+    padding-bottom: 7rem;
+  }
+}
+
+.glass {
+  border-width: 1px;
+  border-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-soft {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.button-hover {
+  transition: all 0.3s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.button-hover:hover {
+  transform: translateY(-0.25rem);
 }
