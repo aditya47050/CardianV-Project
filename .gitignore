@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# machine learning binary checkpoints
+*.pt
+*.pth
+*.ckpt
+backend/checkpoints/*.pt
+

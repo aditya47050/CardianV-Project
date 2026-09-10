@@ -17,6 +17,7 @@ import {
   Play,
   Pause,
 } from "lucide-react";
+import { AnalysisResponse } from "@/types/analysis";
 
 type Step = "input" | "analyzing" | "result";
 
@@ -28,7 +29,11 @@ export function HeartAnalyzer() {
     name: string;
     size: string;
     isSample?: boolean;
+    rawFile?: File | Blob;
   } | null>(null);
+
+  // Analysis result state from real API route
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
 
   // Analysis progress animation states
   const [progress, setProgress] = useState(0);
@@ -41,10 +46,15 @@ export function HeartAnalyzer() {
 
   // Handle demo sample selection
   const handleSelectDemo = () => {
+    const demoBlob = new Blob(["circadian_demo_pcg_sample"], { type: "audio/wav" });
+    const demoFile = new File([demoBlob], "circadian_heart_sound_normal_s1s2.wav", {
+      type: "audio/wav",
+    });
     setAudioFile({
       name: "circadian_heart_sound_normal_s1s2.wav",
       size: "2.4 MB",
       isSample: true,
+      rawFile: demoFile,
     });
     if (!patientName) {
       setPatientName("Sarah Jenkins");
@@ -60,18 +70,44 @@ export function HeartAnalyzer() {
         name: file.name,
         size: `${sizeMB} MB`,
         isSample: false,
+        rawFile: file,
       });
     }
   };
 
-  // Start analysis trigger
-  const handleStartAnalysis = () => {
+  // Start analysis trigger & API call
+  const handleStartAnalysis = async () => {
     if (!audioFile || !patientName.trim()) return;
     setStep("analyzing");
     setProgress(0);
+    setAnalysisResult(null);
+
+    // Prepare FormData payload containing the audio File/Blob
+    const formData = new FormData();
+    if (audioFile.rawFile) {
+      formData.append("file", audioFile.rawFile, audioFile.name);
+    }
+    formData.append("patientName", patientName);
+    if (patientAge) formData.append("patientAge", patientAge);
+
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+      const data: AnalysisResponse = await res.json();
+      setAnalysisResult(data);
+    } catch (err: unknown) {
+      setAnalysisResult({
+        success: false,
+        modelConfigured: false,
+        status: "Network Error",
+        error: err instanceof Error ? err.message : "Failed to connect to API endpoint.",
+      });
+    }
   };
 
-  // Simulate AI Analysis loading sequence
+  // Simulate AI Analysis loading sequence synchronized with API response
   useEffect(() => {
     if (step !== "analyzing") return;
 
@@ -86,7 +122,7 @@ export function HeartAnalyzer() {
 
     let currentProgress = 0;
     const interval = setInterval(() => {
-      currentProgress += 3;
+      currentProgress += 4;
       setProgress(Math.min(currentProgress, 100));
 
       const phaseIndex = Math.min(
@@ -99,9 +135,9 @@ export function HeartAnalyzer() {
         clearInterval(interval);
         setTimeout(() => {
           setStep("result");
-        }, 400);
+        }, 300);
       }
-    }, 70);
+    }, 60);
 
     return () => clearInterval(interval);
   }, [step]);
@@ -111,6 +147,7 @@ export function HeartAnalyzer() {
     setStep("input");
     setProgress(0);
     setAudioFile(null);
+    setAnalysisResult(null);
     setIsPlaying(false);
   };
 
@@ -284,10 +321,11 @@ export function HeartAnalyzer() {
               type="button"
               onClick={handleStartAnalysis}
               disabled={!audioFile || !patientName.trim()}
-              className={`w-full py-4 rounded-xl font-semibold text-base shadow-md transition-all duration-300 flex items-center justify-center space-x-2 ${audioFile && patientName.trim()
+              className={`w-full py-4 rounded-xl font-semibold text-base shadow-md transition-all duration-300 flex items-center justify-center space-x-2 ${
+                audioFile && patientName.trim()
                   ? "bg-[#10a37f] hover:bg-[#0c7a5f] text-white shadow-[0_4px_14px_rgba(16,163,127,0.3)] cursor-pointer"
                   : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                }`}
+              }`}
             >
               <span>Analyze Heart Sound</span>
               <ArrowRight className="w-5 h-5" />
@@ -414,13 +452,23 @@ export function HeartAnalyzer() {
 
             {/* Mobile Result Body Content */}
             <div className="flex-1 px-6 py-6 flex flex-col items-center justify-between text-center space-y-6">
+              {/* Model Pending Connection Notice */}
+              {analysisResult && !analysisResult.modelConfigured && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-2.5 rounded-xl text-xs font-medium text-center w-full max-w-xs flex items-center justify-center space-x-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Model backend pending connection (`MODEL_API_ENDPOINT`)</span>
+                </div>
+              )}
+
               {/* Analysis Title & Time */}
               <div className="space-y-1 mt-2">
                 <h2 className="text-2xl font-bold text-slate-800 font-sans tracking-tight">
                   Analysis Complete
                 </h2>
                 <p className="text-base text-slate-500 font-medium">
-                  7 seconds
+                  {analysisResult?.durationSeconds !== undefined
+                    ? `${analysisResult.durationSeconds} seconds`
+                    : "7 seconds"}
                 </p>
               </div>
 
@@ -500,7 +548,7 @@ export function HeartAnalyzer() {
               {/* Status Header */}
               <div>
                 <h3 className="text-2xl font-bold text-[#10a37f] leading-snug font-sans tracking-tight max-w-xs mx-auto">
-                  No Abnormalities<br />Detected
+                  {analysisResult?.status || "No Abnormalities Detected"}
                 </h3>
               </div>
 
@@ -513,7 +561,11 @@ export function HeartAnalyzer() {
                   AI Analysis Confidence
                 </p>
                 <p className="text-5xl font-bold text-slate-900 font-sans tracking-tight leading-none">
-                  96%
+                  {analysisResult?.confidence !== undefined
+                    ? `${analysisResult.confidence.toFixed(1)}%`
+                    : analysisResult?.modelConfigured
+                    ? "--"
+                    : "N/A"}
                 </p>
               </div>
 
@@ -570,9 +622,19 @@ export function HeartAnalyzer() {
               </div>
 
               <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/60 inline-block">
-                ✓ Analysis Verified
+                ✓ Analysis Engine Ready
               </span>
             </div>
+
+            {/* Model Pending Connection Notice */}
+            {analysisResult && !analysisResult.modelConfigured && (
+              <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 p-3.5 rounded-xl text-xs font-medium flex items-center space-x-2 w-full">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  Pretrained model backend not connected. Set the <code className="bg-amber-100/80 px-1 py-0.5 rounded font-mono">MODEL_API_ENDPOINT</code> environment variable to enable real ML inference.
+                </span>
+              </div>
+            )}
 
             {/* LANDSCAPE LAYOUT FOR WEB / DESKTOP (Side-by-Side 2 Columns) */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-center pt-6">
@@ -658,13 +720,15 @@ export function HeartAnalyzer() {
                     Analysis Complete
                   </h2>
                   <p className="text-sm sm:text-base text-slate-500 font-medium mt-0.5">
-                    7 seconds
+                    {analysisResult?.durationSeconds !== undefined
+                      ? `${analysisResult.durationSeconds} seconds`
+                      : "7 seconds"}
                   </p>
                 </div>
 
                 <div>
                   <h3 className="text-2xl sm:text-3xl font-bold text-[#10a37f] leading-snug font-sans tracking-tight">
-                    No Abnormalities Detected
+                    {analysisResult?.status || "No Abnormalities Detected"}
                   </h3>
                 </div>
 
@@ -677,7 +741,11 @@ export function HeartAnalyzer() {
                     AI Analysis Confidence
                   </p>
                   <p className="text-4xl sm:text-5xl font-bold text-slate-900 font-sans tracking-tight leading-none">
-                    96%
+                    {analysisResult?.confidence !== undefined
+                      ? `${analysisResult.confidence.toFixed(1)}%`
+                      : analysisResult?.modelConfigured
+                      ? "--"
+                      : "N/A"}
                   </p>
                 </div>
 
