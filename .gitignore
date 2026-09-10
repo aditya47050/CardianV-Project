@@ -40,9 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# machine learning binary checkpoints
+# machine learning binary checkpoints & python caches
 *.pt
 *.pth
 *.ckpt
-backend/checkpoints/*.pt
-
+__pycache__/
+*.pyc
+api/checkpoints/
+backend/checkpoints/

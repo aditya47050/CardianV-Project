@@ -22,11 +22,14 @@ export async function POST(
       );
     }
 
-    // Check environment variable for pretrained ML inference endpoint
+    // Resolve model endpoint from environment variables or construct same-origin Vercel route
+    const origin = req.nextUrl.origin;
     const modelEndpoint =
-      process.env.MODEL_API_ENDPOINT || process.env.NEXT_PUBLIC_MODEL_API_ENDPOINT;
+      process.env.MODEL_API_ENDPOINT ||
+      process.env.NEXT_PUBLIC_MODEL_API_ENDPOINT ||
+      `${origin}/api/predict`;
 
-    // If pretrained model API is connected via environment variable, forward payload:
+    // Forward request payload to model inference endpoint:
     if (modelEndpoint) {
       const modelFormData = new FormData();
       modelFormData.append("file", file, file.name);
