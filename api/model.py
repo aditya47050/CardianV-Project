@@ -4,7 +4,6 @@ import torch.nn as nn
 
 try:
     import requests
-    import certifi
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
@@ -107,7 +106,12 @@ class HeartbeatModelInference:
         
         try:
             if HAS_REQUESTS:
-                ca_bundle = certifi.where()
+                try:
+                    import certifi
+                    ca_bundle = certifi.where()
+                except ImportError:
+                    ca_bundle = True
+
                 with requests.get(self.MODEL_URL, stream=True, timeout=120, verify=ca_bundle) as response:
                     response.raise_for_status()
                     with open(temp_path, "wb") as f:
@@ -115,7 +119,12 @@ class HeartbeatModelInference:
                             if chunk:
                                 f.write(chunk)
             else:
-                context = ssl.create_default_context(cafile=certifi.where())
+                try:
+                    import certifi
+                    context = ssl.create_default_context(cafile=certifi.where())
+                except ImportError:
+                    context = ssl.create_default_context()
+
                 with urllib.request.urlopen(self.MODEL_URL, context=context, timeout=120) as response, open(temp_path, "wb") as f:
                     f.write(response.read())
 
