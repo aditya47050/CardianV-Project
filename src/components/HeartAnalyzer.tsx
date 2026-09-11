@@ -166,6 +166,9 @@ export function HeartAnalyzer() {
     setIsPlaying(false);
   };
 
+  const statusText = (analysisResult?.status || analysisResult?.label || "").toLowerCase();
+  const isAbnormal = statusText.includes("abnormal") && !statusText.includes("no abnormal");
+
   return (
     <div className="w-full max-w-4xl mx-auto px-2 sm:px-4">
       {/* ========================================================================= */}
@@ -584,7 +587,7 @@ export function HeartAnalyzer() {
                       ? "text-slate-600 animate-pulse"
                       : analysisResult?.success === false
                       ? "text-rose-600"
-                      : analysisResult?.status?.toLowerCase().includes("abnormal")
+                      : isAbnormal
                       ? "text-rose-600"
                       : "text-[#10a37f]"
                   }`}
@@ -808,7 +811,7 @@ export function HeartAnalyzer() {
                         ? "text-slate-600 animate-pulse"
                         : analysisResult?.success === false
                         ? "text-rose-600"
-                        : analysisResult?.status?.toLowerCase().includes("abnormal")
+                        : isAbnormal
                         ? "text-rose-600"
                         : "text-[#10a37f]"
                     }`}
