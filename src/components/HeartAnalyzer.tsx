@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Upload,
@@ -34,6 +34,12 @@ export function HeartAnalyzer() {
 
   // Analysis result state from real API route
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const isLoadingRef = useRef(isLoading);
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   // Analysis progress animation states
   const [progress, setProgress] = useState(0);
@@ -81,6 +87,7 @@ export function HeartAnalyzer() {
     setStep("analyzing");
     setProgress(0);
     setAnalysisResult(null);
+    setIsLoading(true);
 
     // Prepare FormData payload containing the audio File/Blob
     const formData = new FormData();
@@ -104,6 +111,8 @@ export function HeartAnalyzer() {
         status: "Network Error",
         error: err instanceof Error ? err.message : "Failed to connect to API endpoint.",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -122,6 +131,11 @@ export function HeartAnalyzer() {
 
     let currentProgress = 0;
     const interval = setInterval(() => {
+      if (currentProgress >= 95 && isLoadingRef.current) {
+        setAnalysisPhase("Finalizing cardiac health diagnostic report...");
+        return;
+      }
+
       currentProgress += 4;
       setProgress(Math.min(currentProgress, 100));
 
@@ -131,7 +145,7 @@ export function HeartAnalyzer() {
       );
       setAnalysisPhase(phases[phaseIndex]);
 
-      if (currentProgress >= 100) {
+      if (currentProgress >= 100 && !isLoadingRef.current) {
         clearInterval(interval);
         setTimeout(() => {
           setStep("result");
@@ -140,7 +154,7 @@ export function HeartAnalyzer() {
     }, 60);
 
     return () => clearInterval(interval);
-  }, [step]);
+  }, [step, isLoading]);
 
   // Reset flow back to input screen
   const handleReset = () => {
@@ -148,6 +162,7 @@ export function HeartAnalyzer() {
     setProgress(0);
     setAudioFile(null);
     setAnalysisResult(null);
+    setIsLoading(false);
     setIsPlaying(false);
   };
 
@@ -452,8 +467,16 @@ export function HeartAnalyzer() {
 
             {/* Mobile Result Body Content */}
             <div className="flex-1 px-6 py-6 flex flex-col items-center justify-between text-center space-y-6">
+              {/* API Error Alert Notice */}
+              {analysisResult && !analysisResult.success && analysisResult.error && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2.5 rounded-xl text-xs font-medium text-center w-full max-w-xs flex items-center justify-center space-x-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{analysisResult.error}</span>
+                </div>
+              )}
+
               {/* Model Pending Connection Notice */}
-              {analysisResult && !analysisResult.modelConfigured && (
+              {analysisResult && analysisResult.success && !analysisResult.modelConfigured && (
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-2.5 rounded-xl text-xs font-medium text-center w-full max-w-xs flex items-center justify-center space-x-1.5">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
                   <span>Model backend pending connection (`MODEL_API_ENDPOINT`)</span>
@@ -463,12 +486,20 @@ export function HeartAnalyzer() {
               {/* Analysis Title & Time */}
               <div className="space-y-1 mt-2">
                 <h2 className="text-2xl font-bold text-slate-800 font-sans tracking-tight">
-                  Analysis Complete
+                  {isLoading
+                    ? "Analyzing Heart Sound..."
+                    : analysisResult?.success === false
+                    ? "Analysis Error"
+                    : "Analysis Complete"}
                 </h2>
                 <p className="text-base text-slate-500 font-medium">
-                  {analysisResult?.durationSeconds !== undefined
+                  {isLoading
+                    ? "Processing acoustic signal..."
+                    : analysisResult?.success === false
+                    ? "Unable to complete request"
+                    : analysisResult?.durationSeconds !== undefined
                     ? `${analysisResult.durationSeconds} seconds`
-                    : "7 seconds"}
+                    : "--"}
                 </p>
               </div>
 
@@ -547,8 +578,22 @@ export function HeartAnalyzer() {
 
               {/* Status Header */}
               <div>
-                <h3 className="text-2xl font-bold text-[#10a37f] leading-snug font-sans tracking-tight max-w-xs mx-auto">
-                  {analysisResult?.status || "No Abnormalities Detected"}
+                <h3
+                  className={`text-2xl font-bold leading-snug font-sans tracking-tight max-w-xs mx-auto ${
+                    isLoading
+                      ? "text-slate-600 animate-pulse"
+                      : analysisResult?.success === false
+                      ? "text-rose-600"
+                      : analysisResult?.status?.toLowerCase().includes("abnormal")
+                      ? "text-rose-600"
+                      : "text-[#10a37f]"
+                  }`}
+                >
+                  {isLoading
+                    ? "Analyzing heart sound..."
+                    : analysisResult?.success === false
+                    ? analysisResult?.status || analysisResult?.error || "Analysis Error"
+                    : analysisResult?.status || analysisResult?.label || "No Abnormalities Detected"}
                 </h3>
               </div>
 
@@ -561,11 +606,15 @@ export function HeartAnalyzer() {
                   AI Analysis Confidence
                 </p>
                 <p className="text-5xl font-bold text-slate-900 font-sans tracking-tight leading-none">
-                  {analysisResult?.confidence !== undefined
-                    ? `${analysisResult.confidence.toFixed(1)}%`
-                    : analysisResult?.modelConfigured
-                    ? "--"
-                    : "N/A"}
+                  {isLoading ? (
+                    <span className="text-3xl text-slate-400 font-medium animate-pulse">Processing...</span>
+                  ) : analysisResult?.success === false ? (
+                    <span className="text-3xl text-rose-500 font-medium">--</span>
+                  ) : analysisResult?.confidence !== undefined ? (
+                    `${analysisResult.confidence.toFixed(1)}%`
+                  ) : (
+                    "--"
+                  )}
                 </p>
               </div>
 
@@ -621,13 +670,31 @@ export function HeartAnalyzer() {
                 </span>
               </div>
 
-              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/60 inline-block">
-                ✓ Analysis Engine Ready
-              </span>
+              {isLoading ? (
+                <span className="text-xs font-semibold text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-200/60 inline-block animate-pulse">
+                  ⏳ Analyzing Heart Sound...
+                </span>
+              ) : analysisResult?.success === false ? (
+                <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-3 py-1 rounded-full border border-rose-200/60 inline-block">
+                  ✕ Analysis Failed
+                </span>
+              ) : (
+                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/60 inline-block">
+                  ✓ Analysis Engine Ready
+                </span>
+              )}
             </div>
 
+            {/* API Error Alert Notice */}
+            {analysisResult && !analysisResult.success && analysisResult.error && (
+              <div className="mt-4 bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-xl text-xs font-medium flex items-center space-x-2 w-full">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{analysisResult.error}</span>
+              </div>
+            )}
+
             {/* Model Pending Connection Notice */}
-            {analysisResult && !analysisResult.modelConfigured && (
+            {analysisResult && analysisResult.success && !analysisResult.modelConfigured && (
               <div className="mt-4 bg-amber-50 border border-amber-200 text-amber-800 p-3.5 rounded-xl text-xs font-medium flex items-center space-x-2 w-full">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>
@@ -717,18 +784,40 @@ export function HeartAnalyzer() {
               <div className="md:col-span-7 flex flex-col items-center md:items-start text-center md:text-left space-y-5">
                 <div>
                   <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 font-sans tracking-tight">
-                    Analysis Complete
+                    {isLoading
+                      ? "Analyzing Heart Sound..."
+                      : analysisResult?.success === false
+                      ? "Analysis Error"
+                      : "Analysis Complete"}
                   </h2>
                   <p className="text-sm sm:text-base text-slate-500 font-medium mt-0.5">
-                    {analysisResult?.durationSeconds !== undefined
+                    {isLoading
+                      ? "Processing acoustic signal..."
+                      : analysisResult?.success === false
+                      ? "Unable to complete request"
+                      : analysisResult?.durationSeconds !== undefined
                       ? `${analysisResult.durationSeconds} seconds`
-                      : "7 seconds"}
+                      : "--"}
                   </p>
                 </div>
 
                 <div>
-                  <h3 className="text-2xl sm:text-3xl font-bold text-[#10a37f] leading-snug font-sans tracking-tight">
-                    {analysisResult?.status || "No Abnormalities Detected"}
+                  <h3
+                    className={`text-2xl sm:text-3xl font-bold leading-snug font-sans tracking-tight ${
+                      isLoading
+                        ? "text-slate-600 animate-pulse"
+                        : analysisResult?.success === false
+                        ? "text-rose-600"
+                        : analysisResult?.status?.toLowerCase().includes("abnormal")
+                        ? "text-rose-600"
+                        : "text-[#10a37f]"
+                    }`}
+                  >
+                    {isLoading
+                      ? "Analyzing heart sound..."
+                      : analysisResult?.success === false
+                      ? analysisResult?.status || analysisResult?.error || "Analysis Error"
+                      : analysisResult?.status || analysisResult?.label || "No Abnormalities Detected"}
                   </h3>
                 </div>
 
@@ -741,11 +830,15 @@ export function HeartAnalyzer() {
                     AI Analysis Confidence
                   </p>
                   <p className="text-4xl sm:text-5xl font-bold text-slate-900 font-sans tracking-tight leading-none">
-                    {analysisResult?.confidence !== undefined
-                      ? `${analysisResult.confidence.toFixed(1)}%`
-                      : analysisResult?.modelConfigured
-                      ? "--"
-                      : "N/A"}
+                    {isLoading ? (
+                      <span className="text-2xl sm:text-3xl text-slate-400 font-medium animate-pulse">Processing...</span>
+                    ) : analysisResult?.success === false ? (
+                      <span className="text-2xl sm:text-3xl text-rose-500 font-medium">--</span>
+                    ) : analysisResult?.confidence !== undefined ? (
+                      `${analysisResult.confidence.toFixed(1)}%`
+                    ) : (
+                      "--"
+                    )}
                   </p>
                 </div>
 
@@ -754,7 +847,13 @@ export function HeartAnalyzer() {
                   <span className="font-semibold text-slate-800">
                     Patient: {patientName} {patientAge ? `(${patientAge} yrs)` : ""}
                   </span>
-                  <span className="text-emerald-600 font-medium">Verified Acoustic Signal</span>
+                  <span className={analysisResult?.success === false ? "text-rose-600 font-medium" : "text-emerald-600 font-medium"}>
+                    {isLoading
+                      ? "Processing Signal..."
+                      : analysisResult?.success === false
+                      ? "Signal Error"
+                      : "Verified Acoustic Signal"}
+                  </span>
                 </div>
 
                 {/* Primary CTA Action */}
@@ -774,3 +873,4 @@ export function HeartAnalyzer() {
     </div>
   );
 }
+
